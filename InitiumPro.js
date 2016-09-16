@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         InitiumPro
-// @namespace    soon
+// @namespace    https://github.com/hey-nails/InitiumPro
 // @version      0.0.2
-// @updateURL    soon
-// @downloadURL    soon
-// @supportURL      soon
+// @updateURL    https://github.com/hey-nails/InitiumPro/blob/master/InitiumPro.js
+// @downloadURL    https://github.com/hey-nails/InitiumPro/blob/master/InitiumPro.js
+// @supportURL      https://github.com/hey-nails/InitiumPro
 // @match        https://www.playinitium.com/*
 // @match        http://www.playinitium.com/*
 // @grant        none
