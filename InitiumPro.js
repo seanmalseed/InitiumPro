@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         InitiumPro
 // @namespace    https://github.com/hey-nails/InitiumPro
-// @version      0.4.2
+// @version      0.4.3
 // @updateURL    https://github.com/hey-nails/InitiumPro/blob/master/InitiumPro.js
 // @downloadURL  https://github.com/hey-nails/InitiumPro/blob/master/InitiumPro.js
 // @supportURL   https://github.com/hey-nails/InitiumPro
