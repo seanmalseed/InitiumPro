@@ -1,5 +1,5 @@
 # InitiumPro
-<a href="https://addons.mozilla.org/en-US/firefox/addon/greasemonkey/">Greasemonkey</a>/<a href="http://tampermonkey.net/">Tampermonkey</a> add-on for the browser-based MMORPG Initium.
+<a href="https://addons.mozilla.org/en-US/firefox/addon/greasemonkey/">Greasemonkey</a>/<a href="http://tampermonkey.net/">Tampermonkey</a> add-on for the browser-based MMORPG <a href="https://www.playinitium.com/">Initium.</a>
 
 ![](http://content.screencast.com/users/sean-malseed/folders/Jing/media/c14e56ec-8931-4f70-9356-8f4106c97c56/00001473.png)
 
