@@ -365,7 +365,7 @@ function getLocation() {
 function getPlayerStats() {
     var hp=$("#hitpointsBar").text().split("/");
     return { charachterId:window.characterId,
-            verifyCode:window.verifyCode = "$2a$04$S3euOFE17Mb9pa4SVdhB6O8t6PQrb/vNNsfff/NJ9cjG.075pfNdq",
+            verifyCode:window.verifyCode,
             name:$("a[rel^=#profile]:eq(0)").text(),
             maxhp:parseInt(hp[1]),
             hp:parseInt(hp[0]),
