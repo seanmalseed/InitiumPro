@@ -18,10 +18,9 @@
 /*** INITIUM PRO OPTIONS ***/
 
 var           AUTO_GOLD = true; //auto get gold after battles and when entering a room
-var           AUTO_LOOT = true; //auto get items after battle
 var           AUTO_REST = true; //auto rest if injured and in restable area
 var          AUTO_SWING = false; //repeats attack after your initial attack
-var   AUTO_LEAVE_FORGET = true; //automatically clicks 'Leave and Forget' after a battle
+var   AUTO_LEAVE_FORGET = false; //automatically clicks 'Leave and Forget' after a battle
 var           AUTO_FLEE = 70; //percent of health to flee automatically. 0 turns it off
 var AUTO_CONFIRM_POPUPS = false; //confirms popups like camp name so you can keep your fingers to the metal!
 
