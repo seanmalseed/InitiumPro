@@ -93,7 +93,7 @@
 
 ### Automatically confirm popups
 ***
-* Clicks confirm on popups automatically. Really helps with the flow of creating campsites with no mouse required - especially with the extra hotkey **C** for create campsite!
+* Clicks confirm on popups automatically. Really helps with the flow of creating campsites with no mouse required - especially with the extra hotkey **C** for create campsite! Off by default - change AUTO_CONFIRM_POPUPS to true in settings to enable.
 
 ### Extra hotkeys
 ***
@@ -104,6 +104,12 @@
 ***
 * You automatically rest when you enter a rest area with any damage
 * Option to automatically "Leave and forget" a battle site after winning (set AUTO_LEAVE_FORGET to true in the options)
-* Image rendering changed to make all images look better on high res screens, and allow for images to be zoomed in without blurriness and while maintaining the retro pixel look
+* Image rendering changed to make all images look better on high res screens, and allow for images to be zoomed in without blurriness and while maintaining the retro pixel look (at least in chrome, by adding css **image-rendering: pixelated;**)
 * Navigation buttons are now compact
 * Type of area you are in is now visible in the top-left
+
+## How to change the options
+
+Open the script, and the options block is right at the top. Use true or false, and make sure you leave the semicolon at the end of the line. AUTO_FLEE takes the percent of health under which you'll flee, and 0 turns it off.
+
+![](http://content.screencast.com/users/sean-malseed/folders/Jing/media/79bb9f3e-119b-4cc3-9408-a055138cf5bb/00001482.png)
