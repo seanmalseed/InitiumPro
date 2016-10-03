@@ -2,8 +2,8 @@
 // @name         InitiumPro
 // @namespace    https://github.com/hey-nails/InitiumPro
 // @version      0.5
-// @updateURL    https://github.com/hey-nails/InitiumPro/blob/master/InitiumPro.js
-// @downloadURL  https://github.com/hey-nails/InitiumPro/blob/master/InitiumPro.js
+// @updateURL    https://raw.githubusercontent.com/hey-nails/InitiumPro/master/InitiumPro.js
+// @downloadURL  https://raw.githubusercontent.com/hey-nails/InitiumPro/master/InitiumPro.js
 // @supportURL   https://github.com/hey-nails/InitiumPro
 // @match        https://www.playinitium.com/*
 // @match        http://www.playinitium.com/*
