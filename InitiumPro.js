@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         InitiumPro
 // @namespace    https://github.com/hey-nails/InitiumPro
-// @version      0.4.3
+// @version      0.5
 // @updateURL    https://github.com/hey-nails/InitiumPro/blob/master/InitiumPro.js
 // @downloadURL  https://github.com/hey-nails/InitiumPro/blob/master/InitiumPro.js
 // @supportURL   https://github.com/hey-nails/InitiumPro
@@ -17,45 +17,57 @@
 
 /*** INITIUM PRO OPTIONS ***/
 
-var           AUTO_GOLD = true; //auto get gold after battles and when entering a room
-var           AUTO_REST = true; //auto rest if injured and in restable area
-var          AUTO_SWING = false; //repeats attack after your initial attack
+var           AUTO_GOLD = true;  //auto get gold after battles and when entering a room
+var           AUTO_REST = true;  //auto rest if injured and in restable area
+var          AUTO_SWING = true; //repeats attack after your initial attack
 var   AUTO_LEAVE_FORGET = false; //automatically clicks 'Leave and Forget' after a battle
-var           AUTO_FLEE = 70; //percent of health to flee automatically. 0 turns it off
+var           AUTO_FLEE = 70;    //percent of health to flee automatically. 0 turns it off
 var AUTO_CONFIRM_POPUPS = false; //confirms popups like camp name so you can keep your fingers to the metal!
+var        HIDE_VERSION = false; //this will hide pro icon with the version number (you jerk)
 
 /***************************/
 
 var $=window.jQuery,loc={},player={};
 
+//ajax queue
+(function($) {
+    var ajaxQueue = $({}); // jQuery on an empty object, we are going to use this as our Queue
+    $.ajaxQueue = function( ajaxOpts ) {
+        var jqXHR,dfd = $.Deferred(),promise = dfd.promise();
+        ajaxQueue.queue( doRequest ); // queue our ajax request
+        promise.abort = function( statusText ) { // add the abort method
+            if ( jqXHR ) return jqXHR.abort( statusText ); // proxy abort to the jqXHR if it is active
+            var queue = ajaxQueue.queue(),index = $.inArray( doRequest, queue ); // if there wasn't already a jqXHR we need to remove from queue
+            if ( index > -1 ) queue.splice( index, 1 );
+            dfd.rejectWith( ajaxOpts.context || ajaxOpts, [ promise, statusText, "" ] );// and then reject the deferred
+            return promise;
+        };
+        function doRequest( next ) { jqXHR = $.ajax( ajaxOpts ).done( dfd.resolve ).fail( dfd.reject ).then( next, next );} // run the actual query
+        return promise;
+    };
+})($);
+
 var krill=getThisPartyStarted();
 
-//EXTRA HOTKEYS:
-//C for create campsite
-//H for show hidden paths
-function keyListener(e) {
-    if( e.srcElement.nodeName=='INPUT') return;
-    switch(e.key) {
-        case "c":createCampsite();break;
-        case "h":window.location.replace("/main.jsp?showHiddenPaths=true");break;
-        default:break;
-    }
-}
-
-//listen for keydown events
-document.addEventListener('keydown', keyListener, false);
+//EXTRA HOTKEYS: C for create campsite, H for show hidden paths
+document.addEventListener('keydown', function(e) {
+    if(e.srcElement.nodeName!='INPUT') {
+        if(e.key==="c") window.createCampsite();
+        if(e.key==="h")window.location.replace("/main.jsp?showHiddenPaths=true"); }}, false);
 
 //add shop item stats to shop view
 function loadShopItemDetails() {
     window.FLAG_LOADSHOPITEMS=true;
     var itemsLoaded = setInterval(function() {
-        if ($('.saleItem').length) {
+        var numSold=$(".saleItem-sold").length;
+        if (numSold) {
             //hide sold toggle
-            $(".main-item-filter").append("<div style='padding:15px 1px;float:right;'><a id='toggle-sold-items'>Hide sold items</a></div>");
+            $(".main-item-filter").append("<div style='padding:15px 1px;float:right;'><a id='toggle-sold-items'>Hide "+numSold+" sold items</a></div>");
             $("#toggle-sold-items").bind('click',function() {
-                $(this).text($(this).text() === "Hide sold items" ? "Show sold items" : "Hide sold items");
+                $(this).text($(this).text().substring(0,4) === "Hide"?"Show "+numSold+" sold items":"Hide "+numSold+" sold items");
                 $(".saleItem-sold").parent().parent().parent().toggleClass("hidden");
             });
+
             var shopItems=$(".saleItem");
             for(var i=0;i<shopItems.length;i++) {
                 var itemId=$(shopItems[i]).find(".clue").attr("rel").split("=")[1],
@@ -63,30 +75,32 @@ function loadShopItemDetails() {
                     itemCost=$(shopItems[i]).find(".main-item > span:eq(0)").text(),
                     itemBuyLink=$(shopItems[i]).find("a:eq(1)").attr("onclick");
                 $(shopItems[i]).append("<div class='shop-item-stats table' id='shop-item-container"+itemId+"'><div class='loading'>Loading item stats... <img src='/javascript/images/wait.gif'></div></div>");
-                $.ajax({ url: "viewitemmini.jsp?itemId="+itemId, type: "GET",
-                        itemId: itemId,
-                        itemImg: itemImg,
-                        itemCost: itemCost,
-                        itemBuyLink: itemBuyLink,
-                        success: function(data) {
-                            var itemStatLines=$(data).find("div:not(#item-comparisons) .item-popup-field");
-                            var itemStats={};
-                            for(var t=0;t<itemStatLines.length && $(itemStatLines[t]).text().indexOf(":")!=-1;t++) {
-                                var att=$(itemStatLines[t]).text().split(":");
-                                if(att[1]) itemStats[formatItemStats(att[0])]=att[1].substring(1).replace(/(\r\n|\n|\r)/gm,"");
-                            }
-                            $("#shop-item-container"+this.itemId).html("<div class='row' id='shop-item-row-"+this.itemId+"'>"+
-                                                                       "<div class='cell'><img src='"+this.itemImg+"'></div>"+
-                                                                       "<div class='cell' id='shop-item-"+this.itemId+"'></div>"+
-                                                                       "<div class='cell shop-buy-button' onclick='"+this.itemBuyLink+"'>BUY<br/><span style='font-size:12px;'><img src='images/dogecoin-18px.png' class='small-dogecoin-icon' border='0/'>&nbsp;"+this.itemCost+"</span></div>"+
-                                                                       "</div>");
-                            for(var i=0;i<Object.keys(itemStats).length;i++) {
-                                var statName=Object.keys(itemStats)[i];
-                                var statValue=itemStats[Object.keys(itemStats)[i]];
-                                $("#shop-item-"+this.itemId).append("<div><span>"+statName+":</span> <span>"+statValue+"</span></div>");
-                            }
-                            return true;
-                        }});
+
+                $.ajax({
+                    url: "viewitemmini.jsp?itemId="+itemId, type: "GET",
+                    itemId: itemId,
+                    itemImg: itemImg,
+                    itemCost: itemCost,
+                    itemBuyLink: itemBuyLink
+                }).done(function(data) {
+                    var itemStatLines=$(data).find("div:not(#item-comparisons) .item-popup-field");
+                    var itemStats={};
+                    for(var t=0;t<itemStatLines.length && $(itemStatLines[t]).text().indexOf(":")!=-1;t++) {
+                        var att=$(itemStatLines[t]).text().split(":");
+                        if(att[1]) itemStats[formatItemStats(att[0])]=att[1].substring(1).replace(/(\r\n|\n|\r)/gm,"");
+                    }
+                    $("#shop-item-container"+this.itemId).html("<div class='row' id='shop-item-row-"+this.itemId+"'>"+
+                                                               "<div class='cell'><img src='"+this.itemImg+"'></div>"+
+                                                               "<div class='cell' id='shop-item-"+this.itemId+"'></div>"+
+                                                               "<div class='cell shop-buy-button' onclick='"+this.itemBuyLink+"'>BUY<br/><span style='font-size:12px;'><img src='images/dogecoin-18px.png' class='small-dogecoin-icon' border='0/'>&nbsp;"+this.itemCost+"</span></div>"+
+                                                               "</div>");
+                    for(var i=0;i<Object.keys(itemStats).length;i++) {
+                        var statName=Object.keys(itemStats)[i];
+                        var statValue=itemStats[Object.keys(itemStats)[i]];
+                        $("#shop-item-"+this.itemId).append("<div><span>"+statName+":</span> <span>"+statValue+"</span></div>");
+                    }
+                    return true;
+                });
             }
             window.FLAG_LOADSHOPITEMS=false;
             clearInterval(itemsLoaded);
@@ -103,62 +117,55 @@ function loadLocalMerchantDetails() {
             for(var i=0;i<localMerchants.length;i++) {
                 var shopId=$(localMerchants[i]).find("a").attr("onclick").slice(10,-1);
                 $(localMerchants[i]).append("<div class='merchant-inline-overview' id='store-overview-"+shopId+"'><div class='shop-overview'>Loading store overview... <img src='/javascript/images/wait.gif'></div></div>");
-                $.ajax({ url: "/odp/ajax_viewstore.jsp?characterId="+shopId+"&ajax=true", type: "GET",
-                        shopId: shopId,
-                        success: function(data) {
-                            var shopItemSummary="",items={},itemData=$(data).find(".clue");
-                            for(var i=0;i<itemData.length;i++) { //get uniques
-                                var itemName=$(itemData[i]).text(),itemPic=$(itemData[i]).find("img");
-                                if(!items[itemName]) { items[itemName]=[{name:itemName,img:itemPic.attr("src")}]; }
-                                else { items[itemName].push({name:itemName,img:itemPic.attr("src")});}
-                            }
-                            for(var item in items) { shopItemSummary+="<div class='shop-overview-item'><img src='"+items[item][0].img+"' width='18px'> ("+items[item].length+"x) <span style='color:#DDD;'>"+items[item][0].name+"</span></div>"; }
-                            $("#store-overview-"+this.shopId+" .shop-overview").html("<hr>"+shopItemSummary);
-                        }});
+                $.ajaxQueue({
+                    url: "/odp/ajax_viewstore.jsp?characterId="+shopId+"&ajax=true",
+                    shopId: shopId,
+                }).done(function(data) {
+                    var shopItemSummary="",items={},itemData=$(data).find(".clue");
+                    for(var i=0;i<itemData.length;i++) { //get uniques
+                        var itemName=$(itemData[i]).text(),itemPic=$(itemData[i]).find("img");
+                        if(!items[itemName]) { items[itemName]=[{name:itemName,img:itemPic.attr("src")}]; }
+                        else { items[itemName].push({name:itemName,img:itemPic.attr("src")});}
+                    }
+                    for(var item in items) { shopItemSummary+="<div class='shop-overview-item'><img src='"+items[item][0].img+"' width='18px'> ("+items[item].length+"x) <span style='color:#DDD;'>"+items[item][0].name+"</span></div>"; }
+                    $("#store-overview-"+this.shopId+" .shop-overview").html("<hr>"+shopItemSummary);
+                });
             }
             window.FLAG_LOADSHOPS=false;
             clearInterval(shopsLoaded);
         }
-    }, 1000);
+    }, 500);
 }
 
 function keepPunching() {
     //for a more CircleMUD feel
     if(AUTO_SWING) {
-        if(loc.type==="in combat!" && window.urlParams.type==="attack" && player.health>AUTO_FLEE) {
-            if(window.urlParams.hand==="RightHand") { combatAttackWithRightHand(); }
-            else { combatAttackWithLeftHand(); }
-            $(".main-page:eq(1)").append("<div style='margin-top:-50px;'><span style='color:orange;'>[AUTO-FIGHT]</span>&nbsp;Attacking with "+window.urlParams.hand+"</div>");
+        if(loc.type==="in a fight!" && window.urlParams.type==="attack" && player.health>AUTO_FLEE) {
+            if(window.urlParams.hand==="RightHand")  window.combatAttackWithRightHand();  else  window.combatAttackWithLeftHand();
+            combatMessage("Attacking with "+window.urlParams.hand,"AUTO-SWING");
         }
     }
     if(AUTO_FLEE>0) {
         if(loc.type==="in combat!" && player.health<=AUTO_FLEE) {
-            $(".main-page:eq(1)").append("<div style='margin-top:-20px;'><span style='color:orange;'>[AUTO-FLEE]</span>&nbsp;Your health is below "+AUTO_FLEE+"%, trying to gtfo!</div>");
-            combatEscape();
+            combatMessage("Your health is below "+AUTO_FLEE+"%, trying to gtfo!","AUTO-FLEE");
+            window.combatEscape();
         }
     }
-    if(AUTO_REST) {
-        if(loc.rest===true && player.health<100) {
-            doRest();
-        }
-    }
-    if(AUTO_LEAVE_FORGET) {
-        if(loc.type==="combat site") {
-            if(AUTO_GOLD) {
-                setTimeout(function() {
-                    if(window.gotGold===true) {
-                        $('a[onclick^="leaveAndForgetCombatSite"]').click();
-                    } else {
-                        location.reload();//we didn't get gold, reload and try again.
-                    }
-                }, 7000); //reload aftera wait to make sure we got gold
-            } else {
-                $('a[onclick^="leaveAndForgetCombatSite"]').click();
-            }
+    if(AUTO_REST && loc.rest===true && player.health<100) window.doRest();
+    if(AUTO_LEAVE_FORGET && loc.type==="combat site") {
+        if(AUTO_GOLD) {
+            setTimeout(function() {
+                if(window.gotGold===true) {
+                    $('a[onclick^="leaveAndForgetCombatSite"]').click();
+                } else {
+                    location.reload();//we didn't get gold, reload and try again.
+                }
+            }, 7000); //reload aftera wait to make sure we got gold
+        } else {
+            $('a[onclick^="leaveAndForgetCombatSite"]').click();
         }
     }
 }
-
 //get hotkeys from buttons and put 'em on the map overlay
 function putHotkeysOnMap() {
     var i=0,keys={},otherExits={},mapOverlayDirs=[],
@@ -185,35 +192,32 @@ function putHotkeysOnMap() {
 
 function getLocalGold() {
     var localCharsURL="/locationcharacterlist.jsp";
-    $.ajax({ url: localCharsURL, type: "GET",
-            success: function(data) {
-                var glocalItems = $(data).find('.main-item-controls a');
-                var dogeCollected=0,foundDoge;
-                var battleGoldLink=$(".main-item-container").find('a[onclick*="collectDogecoin"]');
-                if(!glocalItems)return;
-                glocalItems.each(function( index ) {
-                    var onClick=$(this).attr("onclick");
-                    if(onClick===undefined) return;
-                    if(onClick.indexOf("collectDogecoin")>0) { //get gold
-                        foundDoge=parseInt($( this ).text().split(" ")[1]);//add amount of gold
-                        dogeCollected+=foundDoge;
-                        if(foundDoge>0) {
-                            $(this).click();
-                            $(this).html("Collected "+ foundDoge+" gold!");
-                            $(battleGoldLink).text("Collected "+ foundDoge+" gold!").css({"color":"yellow"});
-                        }
-                    }
-                });
+
+    $.ajaxQueue({
+        url: localCharsURL,
+    }).done(function(data) {
+        var goldLinks = $(data).find("[onclick*='Doge']:not(:contains(' 0 gold'))");
+        var dogeCollected=0,confirmedDoge=0,foundDoge;
+        var battleGoldLink=$(".main-item-container").find('a[onclick*="collectDogecoin"]');
+        if(goldLinks.length===0)return showMessage("No gold laying around.","gray");
+        showMessage("<img src='"+window.IMG_GOLDCOIN+"' class='coin-tiny'>&nbsp;<span id='picking-gold-status'>Found gold! Picking it up.</span>","yellow");
+        goldLinks.each(function(index) {
+            var getGoldURL=$(this).attr("onclick").split('"')[1]+"&ajax=true&v="+window.verifyCode;
+            var foundDoge=parseInt($(this).text().split(" ")[1]);
+            dogeCollected+=foundDoge;
+            $.ajaxQueue({url: getGoldURL,doge:this,foundDoge:foundDoge}).done(function(data) {
+                confirmedDoge+=parseInt($(this.doge).text().split(" ")[1]);
+                $(this.doge).html("Collected "+ foundDoge+" gold!");
+                $(battleGoldLink).text("Collected "+ foundDoge+" gold!").css({"color":"yellow"});
+                $("#picking-gold-status").text((confirmedDoge!==dogeCollected)?"Picking up "+confirmedDoge+" of "+dogeCollected+" gold found!":"Picked up "+dogeCollected+" gold!");
+                console.info("Confirmed "+confirmedDoge+" of "+dogeCollected+" doge!");
                 window.gotGold=true;
-                //inform the user of our sweet gains!
-                if(dogeCollected>0) {
-                    //var prevGold=parseInt($("#mainGoldIndicator").text().replace(/,/g, ""));
-                    $("#mainGoldIndicator").text(Number(player.gold+dogeCollected).toLocaleString('en'));
-                    pulse("#mainGoldIndicator","yellow");
-                    showMessage("<img src='"+window.IMG_GOLDCOIN+"' class='coin-tiny'> Picked up "+dogeCollected+" gold!","yellow");
-                }
-            }
-           });
+            });
+        });
+        //inform the user of our sweet gains!
+        $("#mainGoldIndicator").text(Number(player.gold+dogeCollected).toLocaleString('en'));
+        pulse("#mainGoldIndicator","yellow");
+    });
 }
 
 function getLocalStuff() {
@@ -237,20 +241,35 @@ function getLocalStuff() {
                                   viewLink:viewLink,
                                   pickupLink:$(pickupLinks[index]).attr("onclick"),
                                   element:$(pickupLinks[index]),
+                                  updateLocalCount:function(count) { $(".cell[item-name='"+this.name.encode()+"']:eq(0)").parent().find(".cell:eq(1) span").text(count);},
                                   class:itemClass,
                                   rarity:(rarity==="")?rarity="common":rarity=rarity,
                                   stats:{},
                                   statLine:"",
-                                  pickup:function(elem,remElem) {
+                                  delete:function() { return delete window.localItems[this.name][this.id]; },
+                                  pickup:function(elem,remElem,countElem,last) {
                                       $(elem).html("<img src='/javascript/images/wait.gif'>");
-                                      $.ajax({itemId:this.id,
-                                              elem:elem, //element to update
-                                              remElem:remElem, //element to remove on complete
-                                              url: "/ServletCharacterControl?type=moveItem&itemId="+this.id+"&destinationKey=Character_"+window.characterId+"&v="+window.verifyCode+"&ajax=true&v="+window.verifyCode+"&_="+window.clientTime,
-                                              success: function(data) {
+                                      $.ajaxQueue({
+                                          item:this.id,
+                                          name:this.name,
+                                          elem:elem, //element to update
+                                          remElem:remElem, //element to remove on complete
+                                          countElem:countElem, //to update the visible item count
+                                          url: "/ServletCharacterControl?type=moveItem&itemId="+this.id+"&destinationKey=Character_"+window.characterId+"&v="+window.verifyCode+"&ajax=true&v="+window.verifyCode+"&_="+window.clientTime,
+                                      }).done(function(data) {
+                                          var resultMessage=$(data)[2]||null;
+                                          if(resultMessage) {
+                                              showMessage(resultMessage.innerText.split("', '")[1].replace("');",""),"orange");
+                                          } else {
+                                              var remaining = Object.keys(window.localItems[this.name]).length-1;
+                                              window.localItems[this.name][this.item].updateLocalCount(remaining);
+                                              window.localItems[this.name][this.item].delete();
+                                              if(this.remElem && last) {
                                                   removeElement($(this.remElem));
+                                                  getLocalStuff();
                                               }
-                                             });
+                                          }
+                                      });
                                   }
                                  };
                         if(!window.localItems[item.name]) window.localItems[item.name]={}; //create item
@@ -264,10 +283,10 @@ function getLocalStuff() {
                     localItemSummary+=
                         "<div class='row'>"+
                         "<div class='cell localitem-summary-image'><img src='"+firstItem.image+ "'></div>"+
-                        "<div class='cell localitem-summary-count'>(x "+Object.keys(window.localItems[item]).length+") &nbsp;<img src='"+window.IMG_ARROW+"' style='width:11px;'>&nbsp;</div>"+
+                        "<div class='cell localitem-summary-count'>(x <span>"+Object.keys(window.localItems[item]).length+"</span>) &nbsp;<img src='"+window.IMG_ARROW+"' style='width:11px;'>&nbsp;</div>"+
                         "<div class='cell localitem-summary-name show-item-sublist'><div class='main-item-name'><a onclick=''>"+firstItem.name+"</a></div></div>"+
-                        "<div class='cell localitem-summary-view show-item-sublist' item-name='"+firstItem.name+"'><a onclick=''>(View all)</a></div>"+
-                        "<div class='cell localitem-summary-take' item-name='"+firstItem.name+"'><a onclick=''>(Take all)</a></div>"+
+                        "<div class='cell localitem-summary-view show-item-sublist' item-name='"+firstItem.name.encode()+"'><a onclick=''>(View all)</a></div>"+
+                        "<div class='cell localitem-summary-take' item-name='"+firstItem.name.encode()+"'><a onclick=''>(Take all)</a></div>"+
                         "</div>";
                 }
                 //display items in area summary when user enters
@@ -275,7 +294,7 @@ function getLocalStuff() {
                 $("#local-item-summary").css({"background-size":"100% "+((Object.keys(window.localItems).length*28)+100)+"px"});
                 $("#reload-inline-items").bind('click',function(){getLocalStuff();});
                 $('.show-item-sublist').bind('click',function(){ //bind the actions
-                    var itemName=$(this).attr('item-name'),firstItem=window.localItems[itemName][Object.keys(window.localItems[itemName])[0]], //first item in obj
+                    var itemName=$(this).attr('item-name').decode(),firstItem=window.localItems[itemName][Object.keys(window.localItems[itemName])[0]], //first item in obj
                         itemSublist="<div style='font-size:20px;'><img src='"+firstItem.image+ "'> <span style='color:#DDD;'>x"+Object.keys(window.localItems[firstItem.name]).length+"</span> <span>"+firstItem.name+":</span><span style='float:right;font-size:27px;'><a class='close-item-sublist' onclick=''>X</a></span></div><hr>";
                     $(".itemSublist").remove();//remove all other item sublists
                     for(var item in window.localItems[firstItem.name]) { //item sublist popup
@@ -284,23 +303,23 @@ function getLocalStuff() {
                             "<div class='cell "+subItem.class+" localitem-popup-image'><img src='"+subItem.image+ "'>&nbsp;</div>"+
                             "<div class='cell'><a class='"+subItem.class+" localitem-popup-name' rel='"+subItem.viewLink+"'>"+subItem.name+"</a><br/>"+
                             "<div class='inline-stats' id='inline-stats-"+item+"'>Loading item stats...<br/><img src='/javascript/images/wait.gif'></div></div>"+
-                            "<div class='cell localitem-summary-view' style='vertical-align:middle;'>&nbsp;<a class='take-item' itemName='"+encodeURIComponent(subItem.name)+"' itemId='"+item+"'>(Take)</a></div>"+
-                            "</div>";
+                            "<div class='cell localitem-summary-view' style='vertical-align:middle;'>&nbsp;<a class='take-item' itemName='"+encodeURIComponent(subItem.name)+"' itemId='"+item+"'>(Take)</a></div></div>";
                     }
                     var itemSublistPopup='<div class="itemSublist table cluetip ui-widget ui-widget-content ui-cluetip clue-right-rounded cluetip-rounded ui-corner-all" style="position: absolute; margin-bottom:20px; width: 450px; left: '+($(this).position().left)+'px; z-index: 2000000; top: '+($(this).position().top+5)+'px; box-shadow: rgba(0, 0, 0, 0.498039) 1px 1px 6px;"><div class="cluetip-outer" style="position: relative; z-index: 2000000; overflow: visible; height: auto;"><div class="cluetip-inner ui-widget-content ui-cluetip-content">'+itemSublist+'</div></div><div class="cluetip-extra"></div><div class="cluetip-arrows ui-state-default" style="z-index: 2000001; top: -4px; display: block;"></div></div>';
                     $("body").append(itemSublistPopup);
                     $('.close-item-sublist').bind('click',function(){ $(".itemSublist").remove(); }); //close item sublist button closes all item sublists
                     $('.take-item').bind('click',function(){
-                        var lol=window.localItems[decodeURIComponent($(this).attr("itemName"))][$(this).attr("itemId")].pickup(this,$(this).parent().parent());
+                        window.localItems[$(this).attr("itemName").decode()][$(this).attr("itemId")].pickup(this,$(this).parent().parent(),null,true);
                     });
                     for(var itemId in window.localItems[firstItem.name]) ajaxItemStats(firstItem.name,itemId); //load stats in popup
                 });
                 $('.localitem-summary-take').bind('click',function(){ //take all
-                    var objCount=0;
-                    for(var item in window.localItems[$(this).attr('item-name')]) {
-                        objCount++;
-                        if(objCount===Object.keys(window.localItems[$(this).attr('item-name')]).length) { window.localItems[$(this).attr('item-name')][item].pickup(this,$(this).parent()); }
-                        else { window.localItems[$(this).attr('item-name')][item].pickup(this); }
+                    var z=Object.keys(window.localItems[$(this).attr('item-name').decode()]).length;
+                    var itemName=$(this).attr('item-name').decode();
+                    var itemCountDisplay=$(".cell[item-name='"+itemName.encode()+"']:eq(0)").parent().find(".cell:eq(1) span");
+                    while(z--)  {
+                        var itemId=Object.keys(window.localItems[$(this).attr('item-name').decode()])[z];
+                        window.localItems[itemName][itemId].pickup(this,this,itemCountDisplay,(z===0)?true:false);
                     }
                 });
                 $("#reload-inline-items").html("↻");
@@ -375,19 +394,17 @@ function getPlayerStats() {
 
 //display stats
 function statDisplay() {
-    $.ajax({
+    $.ajaxQueue({
         url: $(".character-display-box:eq(0)").children().first().attr("rel"),
-        type: "GET",
-        success: function(data) {
-            var stats = $(data).find('.main-item-subnote');
-            $(".character-display-box:eq(0) > div:eq(1)").append("<div id='pro-stats' class='buff-pane'>"+
-                                                                 "<img src='"+window.IMG_STAT_SWORD+"'><span>"+$( stats[0] ).text().split(" ")[0]+"</span>"+//str
-                                                                 "<img src='"+window.IMG_STAT_SHIELD+"'><span>"+$( stats[1] ).text().split(" ")[0]+"</span>"+//def
-                                                                 "<img src='"+window.IMG_STAT_POTION+"'><span>"+$( stats[2] ).text().split(" ")[0]+"</span>"+//int
-                                                                 "</a></div>");
-            $('.header-stats a:nth-child(2)').children().html("Inv<span style=\"color:#AAA;margin-left:4px;margin-right:-5px;\">("+$( stats[3] ).text().split(" ")[0]+")</span> ");//carry
+    }).done(function(data) {
+        var stats = $(data).find('.main-item-subnote');
+        $(".character-display-box:eq(0) > div:eq(1)").append("<div id='pro-stats' class='buff-pane'>"+
+                                                             "<img src='"+window.IMG_STAT_SWORD+"'><span>"+$( stats[0] ).text().split(" ")[0]+"</span>"+//str
+                                                             "<img src='"+window.IMG_STAT_SHIELD+"'><span>"+$( stats[1] ).text().split(" ")[0]+"</span>"+//def
+                                                             "<img src='"+window.IMG_STAT_POTION+"'><span>"+$( stats[2] ).text().split(" ")[0]+"</span>"+//int
+                                                             "</a></div>");
+        $('.header-stats a:nth-child(2)').children().html("Inv<span style=\"color:#AAA;margin-left:4px;margin-right:-5px;\">("+$( stats[3] ).text().split(" ")[0]+")</span> ");//carry
 
-        }
     });
 }
 //utility stuff
@@ -456,20 +473,21 @@ function updateLayouts() {
     //Add loc type to header
     if(loc.type)$(".header-location").append("<span style='margin-left:12px;color:red;'>("+loc.type+")</span>");
     //show 'em that pro is active!
-    $(".header").append("<div id='initium-pro-version' style='position:absolute;top:262px;margin-left:630px;z-index:99999999;'><a href='https://github.com/hey-nails/InitiumPro' target='_blank'><img style='width:38%;' src='"+window.IMG_PRO+"'><span style='font-size:9px;margin-left:-21px;padding-top:5px;'>v "+GM_info.script.version+"</span></a></div>");
+    if(!HIDE_VERSION)$(".header").append("<div id='initium-pro-version'><a href='https://github.com/hey-nails/InitiumPro' target='_blank'><img src='"+window.IMG_PRO+"'><span>v "+GM_info.script.version+"</span></a></div>");
     //the candle
     $(".header").append("<div id='light'><a onclick='$(\".banner-shadowbox\").toggleClass(\"torched\");'><img src='"+window.IMG_CANDLE+"'></a></div>");
 }
 function updateCSS() {
     $("head").append("<style>"+
                      //style overrides
-                     ".main-page p { margin-top:70px; }"+
+                     "#initium-pro-version { position:absolute;top:239px;margin-left:666px;z-index:99999999; } #initium-pro-version img { width:38%;filter:brightness(.75);transition:.5s ease; } #initium-pro-version img:hover { filter:brightness(1); } #initium-pro-version span { font-size:9px;margin-left:-21px;padding-top:5px; }"+
+                     ".main-page p { margin-top:10px; }"+
                      "img { image-rendering: pixelated; }"+
-                     "#instanceRespawnWarning {display:none!important;}"+
+                     "#instanceRespawnWarning { display:none!important; }"+
                      ".character-display-box { padding: 5px!important; }"+
                      ".main-buttonbox { text-align: center; }"+
                      ".main-button-icon { display: none; }"+
-                     ".main-button-half.action-button { width: 33.3333%;float: left;font-size:15px; }"+
+                     ".main-button-half.action-button { width: 33.3333%;float:left;font-size:15px; }"+
                      ".main-dynamic-content-box { padding-left:10px; }"+
                      "#instanceRespawnWarning { padding:10px; }"+
                      "#banner-loading-icon { opacity: 0.7; }"+
@@ -481,8 +499,9 @@ function updateCSS() {
                      //InitiumPro custom elements
                      ".hidden { display:none!important; }"+
                      ".torched { filter:brightness(2); }"+
-                     "#light { transition:.2s ease;filter:brightness(.3);position:absolute;top:200px;margin-left:710px;z-index:99999999; }"+
+                     "#light { transition:.2s ease;filter:brightness(.3);position:absolute;top:115px;margin-left:710px;z-index:99999999; }"+
                      "#light:hover { filter:brightness(1); }"+
+                     "#toggle-sold-items { padding:15px 1px;float:right; }" +
                      ".merchant-inline-overview { padding:5px 0px 10px 5px; }"+
                      ".main-merchant-container .main-item { margin-top:25px; }"+
                      ".shop-overview { color:#999;margin-bottom:20px; }"+
@@ -492,15 +511,16 @@ function updateCSS() {
                      ".coin-tiny { width:12px; }"+
                      ".table { display:table; } .row { display:table-row; } .cell { display:table-cell; }"+
                      "#local-item-summary { margin: 0px 0px 0px 10px;background:url(/images/ui/large-popup-middle.jpg);background-position-y:-50px;overflow:hidden; }"+
+                     "#local-item-summary .cell { vertical-align:middle; }"+
+                     "#local-item-summary .cell:first-of-type { text-align:center;padding:0px 13px 0px 3px; }"+
+                     "#local-item-summary .cell:first-of-type img { height:24px;width:24px;transition: .2s ease; }"+
+                     "#local-item-summary .cell:first-of-type img:hover { filter:brightness(1.2); }"+
+                     "#local-item-summary .cell:nth-of-type(2) { color:#ddd;padding-right:10px;text-align:right;}"+
+                     "#local-item-summary .cell:nth-of-type(3) { padding-right:18px;color:#FFF; }"+
+                     "#local-item-summary .cell:nth-of-type(4) a { padding-right:13px;color:#e69500; }"+
+                     "#local-item-summary .cell:nth-of-type(5) a { color:#666666; }"+
                      ".blue-box-full-top { margin: 15px 0px 0px 10px;height:10px;background:url(/images/ui/large-popup-top.jpg);background-position-y:-5px; }"+
                      ".blue-box-full-bottom { margin: 0px 0px 20px 10px;height:10px;background:url(/images/ui/large-popup-bottom.jpg); background-position-y:-5px; }"+
-                     ".localitem-summary-image { padding:0px 13px 0px 3px;vertical-align:middle; } .localitem-summary-image image { height:30px;width:30px; }"+
-                     ".localitem-summary-count { color:#DDD;padding-right:10px;text-align:right;vertical-align:middle; }"+
-                     ".localitem-summary-name { padding-right:15px;color:#FFF;vertical-align:middle; }"+
-                     ".localitem-summary-rarity { padding-left:15px;color:gray;vertical-align:middle; }"+
-                     ".main-item-name { }"+
-                     ".localitem-summary-view { padding-right:13px;vertical-align:middle; } .localitem-summary-view a { color:#e69500; }"+
-                     ".localitem-summary-take { vertical-align:middle; } .localitem-summary-take a { color:#666666; }"+
                      "#reload-local-items-container { height:25px;float:right;padding-right:5px; }"+
                      ".shop-item-stats { transition:.2s ease;border:1px solid #404040;min-height:70px;padding:10px;margin:1px;width:700px;border-radius:10px;background:rgba(0,0,0,.2); }"+
                      ".shop-item-stats:hover { background:rgba(0,0,0,.15); }"+
@@ -508,6 +528,7 @@ function updateCSS() {
                      ".shop-item-stats .cell > div { height:18px;margin-left:10px;float:left;color:white; }"+
                      ".shop-item-stats .cell > div > span:nth-child(odd) { color:orange; }"+
                      ".shop-item-stats .loading { width:100%;height:100%;vertical-align:middle;padding-top:27px;text-align:center; }"+
+                     ".shop-item-stats .row > .cell:first-of-type) { width:80px;padding-right:5px; }"+
                      ".shop-item-stats .cell:not(.shop-buy-button) img { transition:.2s ease;filter:drop-shadow(4px 4px 6px rgba(0,0,0,.85));width:50px;padding:0px 10px; }"+
                      ".shop-item-stats .cell:not(.shop-buy-button) img:hover { filter:brightness(1.2) drop-shadow(1px 2px 8px rgba(0,0,0,1));transform: rotate(-5deg); }"+
                      ".shop-buy-button { transition: .2s ease;width:85px;text-align:center;border:1px solid rgba(173,173,173,0.1);border-radius:10px;background:rgba(255,255,255,0.1);}"+
@@ -525,7 +546,10 @@ function updateCSS() {
     window.IMG_CANDLE="data:image/gif;base64,R0lGODlhHgA8AKIHAEEyMdmgZu7Fl99xJopvMP///6wyMv///yH5BAEAAAcALAAAAAAeADwAAAP/eLq8Zi3KqR69OOvNu3cfBoXSM5KNiUbq6gzD6RqwvNK1HRqCEOsfns8y6/1cCtgAuVAyGYBVbxoI4EjTXhUAw/oGhV6h6uwYwWJy91MdBwQFdyBUFdTjePr7ji/o7W9xU398g2x7gWE9hImGHnWFi4eAcIoCjFmSj4iZlx9Ub5mYdZodkJylHKeUqRugrJ4er6SxZlqotRyzobmumachncCfv4jBxYB/oFVzk8tVyresm6HMzK0Y14DW2A1kCtrW1hnfB+Hi0BEE6wQAdettcehkW+wK7OtcA+1TAP7t+gDgI7BgIAEYAqe0W6jPYIR/+Pzp2zfQHwaJGDNm1KCxCCPGDh4lUkgAADs=";
     window.IMG_BOXBUTTON="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAAB1CAYAAACGYelhAAAB20lEQVR4nO3UsW3CUBRG4Vu4dIUsKGKLBZAyQArGyAreALmlZgFKqtRMQJFBUqTIGE6RiALsSOg5MuacX/pKF0/3yBHOOeecc879sUVEnDQJzz03TNoyIlpNwrrnhkkzgOkwADgDgEsOYBE/Bz/LsuylKIpW92U+n1/J8/z18n4R8XRLAKfLqoqiaA+Hg+7M8Xi8slqtuv4KHwbwgAwAzgDgDABu9AC2261GtNlsrlRVZQAUBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAZwBwBgBnAHAGAGcAcAYAN3oA+/0+SdM0SjB6AKm6HqA0BgBnAHAGADdEAG+/H5zNZrPP3W7XDq2uaw2sLMuvy/tFxPstAXRt2VGV7tO654ZJM4DpMAA4A4AzALh/CcA555xzzj3IvgGv+knN2J8eTwAAAABJRU5ErkJggg==";
 }
+String.prototype.decode=function() { return decodeURIComponent(this).replace("%27","'"); };
+String.prototype.encode=function() { return encodeURIComponent(this).replace(/'/g, "%27"); };
 function removeElement(el) {$(el).fadeOut(300, function() { $(this).remove(); });}
-function showMessage(msg,color) { $(".main-dynamic-content-box").first().append("<div style=\"color:"+(color||"white")+";padding-top:15px;\">"+msg+"</div>");}
+function showMessage(msg,color) { $(".show-message").remove();$(".main-dynamic-content-box").first().append("<div class='show-message' style=\"color:"+(color||"white")+";padding-top:15px;\">"+msg+"</div>");}
+function combatMessage(msg,type) { return $(".main-page:eq(1) > p:eq(0)").append("<div style='margin:10px 0px;'><span style='color:orange;'>["+(type||"INFO")+"]</span>&nbsp;"+msg+"</div>"); }
 function pulse(elName,color) { $(elName).css({"background-color":color}).fadeTo(400, 0.5, function() { $(elName).fadeTo(300, 1).css({"background-color":""}); }); }
 function getUrlParams() { var params={};window.location.search.replace(/[?&]+([^=&]+)=([^&]*)/gi, function(str,key,value) { params[key] = value; });return params;}
